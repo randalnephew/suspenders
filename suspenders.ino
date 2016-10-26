@@ -14,14 +14,19 @@
 #define DATA_PIN01 11
 #define DATA_PIN02 12
 
-#define NUM_PATTERNS 2
+#define NUM_PATTERNS 3
 typedef void (* GenericFP)();
-GenericFP patterns[NUM_PATTERNS] = {&rainbow, 
-                                    &chasing_random_colors};
+GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow, 
+	&chasing_random_colors_alternating};
 #define NUM_LINES 2
 
+	unsigned long lastFrame = 0;
+	int pattern_length = 0;
+	unsigned long pattern_start_time = 0;
+	int current_pattern_index = 0;
+	int frame_interval = 150;
 
-CRGB leds[NUM_LINES][NUM_LEDS];
+	CRGB leds[NUM_LINES][NUM_LEDS];
 
 // Defines for p_color_temp
 #define TEMPERATURE_1 Tungsten100W
@@ -32,136 +37,79 @@ CRGB leds[NUM_LINES][NUM_LEDS];
 #define BLACKTIME   3
 
 
-void setup() { 
-       FastLED.addLeds<WS2812B, DATA_PIN01, GRB>(leds[0], NUM_LEDS);
-       FastLED.addLeds<WS2812B, DATA_PIN02, GRB>(leds[1], NUM_LEDS);
-       FastLED.clear();
-       FastLED.setBrightness(BRIGHTNESS_DEFAULT);
-       FastLED.show();
-}
+	void setup() { 
+		FastLED.addLeds<WS2812B, DATA_PIN01, GRB>(leds[0], NUM_LEDS);
+		FastLED.addLeds<WS2812B, DATA_PIN02, GRB>(leds[1], NUM_LEDS);
+		FastLED.clear();
+		FastLED.setBrightness(BRIGHTNESS_DEFAULT);
+		FastLED.show();
+	}
 
-void loop() {
-//  chasing_random_colors();
-  for(int x=0;x<NUM_PATTERNS;x++)
-    patterns[x]();
-}
+	void loop() {
+		int cur_time = millis();
+		if(cur_time > (pattern_length + pattern_start_time)){
+			pattern_start_time = cur_time;
+			pattern_length = 4000;//random16(4000,16000);
+			current_pattern_index = (current_pattern_index + 1) % NUM_PATTERNS;
+		}
+		unsigned long frame = cur_time/frame_interval;
+		if(frame > lastFrame || frame == 0){
+			lastFrame = frame;
+			patterns[current_pattern_index]();
+			FastLED.show();			
+		}
 
-
-CRGB get_random_color() {
-  CHSV hsv(random8(), 255, 255);
-  CRGB rgb;
-  hsv2rgb_rainbow( hsv, rgb);
-  return rgb;
-//  CRGB target;
-//  target.red=random8();
-//  target.blue=random8();
-//  target.green=random8();
-//  return target;
-}
-
-void rainbow() {
-  int cycles=1000;
-  for (int x=0; x < cycles; x++){
-    // draw a generic, no-name rainbow
-    static uint8_t starthue = 0;
-    for(int z=0;z<NUM_LINES;z++)
-      fill_rainbow(leds[z], NUM_LEDS, --starthue, 20);
-    // Choose which 'color temperature' profile to enable.
-    uint8_t secs = (millis() / 1000) % (DISPLAYTIME * 2);
-    if( secs < DISPLAYTIME) {
-      FastLED.setTemperature( TEMPERATURE_1 ); // first temperature
-//      for(int z=0;z<NUM_LINES;z++)
-//        leds[z][0] = TEMPERATURE_1; // show indicator pixel
-    } else {
-      FastLED.setTemperature( TEMPERATURE_2 ); // second temperature
-//      for(int z=0;z<NUM_LINES;z++)
-//        leds[z][0] = TEMPERATURE_2; // show indicator pixel
-    }
-    FastLED.show();
-    FastLED.delay(8);
-  }
-  
-}
-
-void  chasing_random_colors() {
-  FastLED.clear();
-  int cycles = 100;
-  leds[0][0] = get_random_color();
-  leds[1][0] = get_random_color();
-  FastLED.show();
-  delay(1000);
-  for (int cycle; cycle < cycles; cycle++){
-    CRGB temp0[NUM_LEDS];
-    CRGB temp1[NUM_LEDS];
-    for (int x=0; x < NUM_LEDS-1; x++){
-      temp0[x+1] = leds[0][x];
-      temp1[x+1] = leds[1][x];
-//      leds[0][NUM_LEDS-x] = leds[0][NUM_LEDS-x-1];
-//      leds[1][NUM_LEDS-x] = leds[1][NUM_LEDS-x-1];
-    }
-    memcpy(leds[0], temp0, sizeof(CRGB) * NUM_LEDS);
-    memcpy(leds[1], temp0, sizeof(CRGB) * NUM_LEDS);
-    
-    delay(300);
-    if (cycle % 3 == 2){
-      CRGB new_color = get_random_color();
-      leds[0][0] = new_color;
-      leds[1][0] = new_color;
-    }
-    else{
-      leds[0][0] = CRGB::Black;
-      leds[1][0] = CRGB::Black;   
-    }
-  FastLED.show();
-  }  
-}
-
-void  chasing_random_colors_alternating() {
-  int cycles = 200;
-  for (int x=0;x<NUM_LEDS;x++){
-    leds[0][x] = CRGB::Black;
-    leds[1][x] = CRGB::Black;
-  }
-  FastLED.show();
-  for (int x=0;x < cycles; x++){
-    memcpy(&leds[0][1], &leds[0][0], sizeof(CRGB) * (NUM_LEDS - 1));
-    memcpy(&leds[1][1], &leds[1][0], sizeof(CRGB) * (NUM_LEDS - 1));
-//  for(int y = NUM_LEDS; y--)
-//    for(int y = 1 ; y < NUM_LEDS; y++){
-//      leds[0][y] = leds[0][y-1];
-//      leds [1][NUM_LEDS - y] = leds[1][NUM_LEDS - (y+1)];
-//    }
-    if (x % 3 == 0){
-      leds[0][0] = get_random_color();
-      leds[1][NUM_LEDS] = get_random_color();
-    }
-    else{
-      leds[0][0] = CRGB::Black;
-      leds[1][NUM_LEDS] = CRGB::Black;
-    }
-    FastLED.show();
-    delay(50);
-  }
-}
+	}
 
 
-void all_red(){
-  int cycles = 20;
-  for (int x = 0; x<cycles; x++){
-    for (int y = 0; y < NUM_LEDS; y++){
-      leds[0][y]= CRGB::Red;
-      leds[1][y]= CRGB::Red;
-    }
-    FastLED.show();
-    delay(50);
-  }
-  for (int x = 0; x<1; x++){
-    for (int y = 0; y < NUM_LEDS; y++){
-      leds[0][y]= CRGB::Black;
-      leds[1][y]= CRGB::Black;
-    }
-    FastLED.show();
-    delay(50);
-  }  
-}
+	CRGB get_random_color() {
+		CHSV hsv(random8(), 255, 255);
+		CRGB rgb;
+		hsv2rgb_rainbow( hsv, rgb);
+		return rgb;
+	}
 
+	void rainbow(int frameInterval) {
+		int rainbow_density = 8; //lower==less dense
+		increment_all_leds();
+		for(int z=0;z<NUM_LINES;z++){
+			fill_rainbow(leds[z], 1, lastFrame*rainbow_density);
+		}
+	}
+
+	void usa(){
+		increment_all_leds();
+		int strip_length = 3;
+		int usa_index = lastFrame % (3*strip_length);
+		int usa_color_index = usa_index / strip_length;
+		CRGB usa_colors[3] = {CRGB::Red, CRGB::White, CRGB::Blue};
+		for(int z=0;z<NUM_LINES;z++){
+			leds[z][0] = usa_colors[usa_color_index];
+		}
+	}
+
+
+	void shift_leds(CRGB * leds_to_shift, int length, int shift_amount){
+		CRGB temp[length];
+		for (int x=0; x < length-shift_amount; x++){
+			temp[x+shift_amount] = leds_to_shift[x];
+		}
+		memcpy(leds_to_shift, temp, sizeof(CRGB) * length);
+	}
+
+	void increment_all_leds(){
+		for(int i = 0; i < NUM_LINES; i++){
+			shift_leds(leds[i], NUM_LEDS, 1);
+		}	
+	}
+
+	void  chasing_random_colors_alternating() {
+		CRGB new_color = CRGB::Black;	
+		if(!leds[0][0] && !leds[0][1]){
+			new_color = get_random_color();
+		}
+		increment_all_leds();		
+		for(int z=0;z<NUM_LINES;z++){
+			leds[z][0] = new_color;
+		}
+	}
