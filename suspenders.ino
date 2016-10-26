@@ -20,9 +20,9 @@ GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow,
 	&chasing_random_colors_alternating};
 #define NUM_LINES 2
 
-	unsigned long lastFrame = 0;
-	int pattern_length = 0;
-	unsigned long pattern_start_time = 0;
+	unsigned long frame = 0;
+  unsigned long pattern_start_ts = 0;
+	unsigned long pattern_duration = 0;
 	int current_pattern_index = 0;
 	int frame_interval = 150;
 
@@ -46,15 +46,17 @@ GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow,
 	}
 
 	void loop() {
-		int cur_time = millis();
-		if(cur_time > (pattern_length + pattern_start_time)){
-			pattern_start_time = cur_time;
-			pattern_length = 4000;//random16(4000,16000);
+		unsigned long now = millis();
+    unsigned long elapsed = now - pattern_start_ts;
+    //check if the pattern time has elapsed - overflow safe!
+		if(elapsed > pattern_duration){
+      pattern_duration = 4000;//random16(4000,16000)
+			pattern_start_ts = now;
 			current_pattern_index = (current_pattern_index + 1) % NUM_PATTERNS;
 		}
-		unsigned long frame = cur_time/frame_interval;
-		if(frame > lastFrame || frame == 0){
-			lastFrame = frame;
+		unsigned long newFrame = now/frame_interval;
+		if(newFrame != frame){
+			frame = newFrame;
 			patterns[current_pattern_index]();
 			FastLED.show();			
 		}
@@ -69,25 +71,29 @@ GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow,
 		return rgb;
 	}
 
-	void rainbow(int frameInterval) {
+	void rainbow() {
 		int rainbow_density = 8; //lower==less dense
 		increment_all_leds();
 		for(int z=0;z<NUM_LINES;z++){
-			fill_rainbow(leds[z], 1, lastFrame*rainbow_density);
+			fill_rainbow(leds[z], 1, frame*rainbow_density);
 		}
 	}
 
 	void usa(){
-		increment_all_leds();
-		int strip_length = 3;
-		int usa_index = lastFrame % (3*strip_length);
-		int usa_color_index = usa_index / strip_length;
-		CRGB usa_colors[3] = {CRGB::Red, CRGB::White, CRGB::Blue};
-		for(int z=0;z<NUM_LINES;z++){
-			leds[z][0] = usa_colors[usa_color_index];
-		}
+		CRGB usa_pattern[9] = {
+            CRGB::Red, CRGB::Red, CRGB::Red, 
+            CRGB::White, CRGB::White, CRGB::White, 
+            CRGB::Blue, CRGB::Blue, CRGB::Blue};
+        generic_pattern(usa_pattern, 9);
 	}
 
+    void generic_pattern(CRGB * pattern, int pattern_length){
+        increment_all_leds();
+        int pattern_index = frame % pattern_length;
+        for(int i = 0; i < NUM_LINES; i++){
+            leds[i][0] = pattern[pattern_index];
+        }
+    }
 
 	void shift_leds(CRGB * leds_to_shift, int length, int shift_amount){
 		CRGB temp[length];
