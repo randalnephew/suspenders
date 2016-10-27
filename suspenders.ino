@@ -14,10 +14,13 @@
 #define DATA_PIN01 11
 #define DATA_PIN02 12
 
-#define NUM_PATTERNS 4
+#define NUM_PATTERNS 6
 typedef void (* GenericFP)();
-GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow,
-                                    &chasing_random_colors_alternating, &chasing_random_colors
+GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow, 
+                                    &random_complementary,
+                                    &chasing_random_colors_alternating,
+                                    &random_complementary_bars,
+                                    &chasing_random_colors
                                    };
 #define NUM_LINES 2
 
@@ -26,6 +29,8 @@ unsigned long pattern_start_ts = 0;
 unsigned long pattern_duration = 0;
 int current_pattern_index = 0;
 int frame_interval = 150;
+
+CRGB global_random_color = CRGB::Black;
 
 CRGB leds[NUM_LINES][NUM_LEDS];
 
@@ -51,9 +56,10 @@ void loop() {
   unsigned long elapsed = now - pattern_start_ts;
   //check if the pattern time has elapsed - overflow safe!
   if (elapsed > pattern_duration) {
-    pattern_duration = 10000;//random16(4000,16000)
+    pattern_duration = 4000;//random16(4000,16000)
     pattern_start_ts = now;
     current_pattern_index = (current_pattern_index + 1) % NUM_PATTERNS;
+    global_random_color = get_random_color();
   }
   unsigned long newFrame = now / frame_interval;
   if (newFrame != frame) {
@@ -132,6 +138,27 @@ void chasing_random_colors(bool alternating) {
     } else {
       shift_leds(leds[i], NUM_LEDS, 1);
       leds[i][0] = new_color;
+    }
+  }
+}
+
+void random_complementary(){
+  complementary_color_bars(get_random_color(), 5);
+}
+
+void random_complementary_bars(){
+  complementary_color_bars(global_random_color, 5);
+}
+
+void complementary_color_bars(CRGB color, int length){
+  CRGB complementary_color = CRGB(0xFFFFFF) - color;
+  shift_all_leds(1);
+
+  for(int i = 0; i < NUM_LINES; i++){
+    if(frame % (length*2) < length){      
+      leds[i][0] = color;
+    } else {
+      leds[i][0] = complementary_color;
     }
   }
 }
