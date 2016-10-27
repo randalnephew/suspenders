@@ -17,7 +17,7 @@
 #define NUM_PATTERNS 3
 typedef void (* GenericFP)();
 GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow, 
-	&chasing_random_colors_alternating};
+	&chasing_random_colors_alternating, &chasing_random_colors};
 #define NUM_LINES 2
 
 	unsigned long frame = 0;
@@ -109,13 +109,28 @@ GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow,
 		}	
 	}
 
-	void  chasing_random_colors_alternating() {
+    void chasing_random_colors(){
+        chasing_random_colors(false);
+    }
+
+    void chasing_random_colors_alternating(){
+        chasing_random_colors(true);
+    }
+
+	void chasing_random_colors(bool alternating) {
 		CRGB new_color = CRGB::Black;	
 		if(!leds[0][0] && !leds[0][1]){
 			new_color = get_random_color();
 		}
-		increment_all_leds();		
-		for(int z=0;z<NUM_LINES;z++){
-			leds[z][0] = new_color;
-		}
+
+	    shift_leds(leds[0], NUM_LEDS, 1);
+        leds[0][0] = new_color;
+
+        for (int i = 0; i < NUM_LEDS; i++){ 
+            if (alternating){
+                leds[1][i] = leds[0][NUM_LEDS - i];
+            } else {
+                leds[1][i] = leds[0][i];
+            }
+        }
 	}
