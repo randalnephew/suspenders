@@ -14,9 +14,10 @@
 #define DATA_PIN01 11
 #define DATA_PIN02 12
 
-#define NUM_PATTERNS 6
+#define NUM_PATTERNS 7
 typedef void (* GenericFP)();
-GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow, 
+GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow,
+                                    &larson_scanner_wipe,
                                     &random_complementary,
                                     &chasing_random_colors_alternating,
                                     &random_complementary_bars,
@@ -27,6 +28,8 @@ GenericFP patterns[NUM_PATTERNS] = {&usa, &rainbow,
 unsigned long frame = 0;
 unsigned long pattern_start_ts = 0;
 unsigned long pattern_duration = 0;
+unsigned long now = millis();
+unsigned long elapsed = now - pattern_start_ts;
 int current_pattern_index = 0;
 int frame_interval = 150;
 
@@ -49,14 +52,15 @@ void setup() {
   FastLED.clear();
   FastLED.setBrightness(BRIGHTNESS_DEFAULT);
   FastLED.show();
+  random16_add_entropy(random());
 }
 
 void loop() {
-  unsigned long now = millis();
-  unsigned long elapsed = now - pattern_start_ts;
+  now = millis();
+  elapsed = now - pattern_start_ts;
   //check if the pattern time has elapsed - overflow safe!
   if (elapsed > pattern_duration) {
-    pattern_duration = 4000;//random16(4000,16000)
+    pattern_duration = 8000;//random16(4000,16000)
     pattern_start_ts = now;
     current_pattern_index = (current_pattern_index + 1) % NUM_PATTERNS;
     global_random_color = get_random_color();
@@ -142,7 +146,32 @@ void chasing_random_colors(bool alternating) {
   }
 }
 
+CRGB get_complementary_color(CRGB color){
+  CHSV hsv_color = rgb2hsv_approximate(color);
+  hsv_color.hue = hsv_color.hue - 128;
+  CRGB rgb_complement;
+  hsv2rgb_rainbow( hsv_color, rgb_complement);
+  return rgb_complement;
+}
+
+void larson_scanner_wipe(){
+  frame_interval = 30;
+  unsigned int pattern_frame = elapsed / frame_interval;
+  // 0 == forwards, 1 = backwards
+  int direction = (pattern_frame / NUM_LEDS) % 2;
+  for(int i = 0; i < NUM_LINES; i++){
+    if(direction == 0){
+      shift_leds(leds[i], NUM_LEDS, 1);
+      leds[i][0] = global_random_color;    
+    } else {
+      shift_leds(leds[i], NUM_LEDS, -1);
+      leds[i][NUM_LEDS - 1] = get_complementary_color(global_random_color);     
+    }
+  }
+}
+
 void random_complementary(){
+  frame_interval = 120;
   complementary_color_bars(get_random_color(), 5);
 }
 
@@ -151,7 +180,7 @@ void random_complementary_bars(){
 }
 
 void complementary_color_bars(CRGB color, int length){
-  CRGB complementary_color = CRGB(0xFFFFFF) - color;
+  CRGB complementary_color = get_complementary_color(color);
   shift_all_leds(1);
 
   for(int i = 0; i < NUM_LINES; i++){
