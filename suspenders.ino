@@ -1,15 +1,13 @@
 #include <FastLED.h>
-
-//#include "FastLED.h"
+#include <Bounce2.h>
 
 // How many leds in your strip?
 #define NUM_LEDS 47
 
 #define BRIGHTNESS_DEFAULT 100
 
-// For led chips like Neopixels, which have a data line, ground, and power, you just
-// need to define DATA_PIN.  For led chipsets that are SPI based (four wires - data, clock,
-// ground, and power), like the LPD8806 define both DATA_PIN and CLOCK_PIN
+#define CHIPSET WS2812B
+#define COLOR_ORDER GRB
 
 #define DATA_PIN01 11
 #define DATA_PIN02 12
@@ -31,52 +29,79 @@ unsigned long pattern_duration = 0;
 unsigned long now = millis();
 unsigned long elapsed = now - pattern_start_ts;
 int current_pattern_index = 0;
-int frame_interval = 150;
+int frame_interval = 100;
+int last_button_state = HIGH;
 
 CRGB global_random_color = CRGB::Black;
 
 CRGB leds[NUM_LINES][NUM_LEDS];
 
-// Defines for p_color_temp
-#define TEMPERATURE_1 Tungsten100W
-#define TEMPERATURE_2 OvercastSky
-// How many seconds to show each temperature before switching
-#define DISPLAYTIME 20
-// How many seconds to show black between switches
-#define BLACKTIME   3
+#define brightness_pin A0
+#define auto_toggle_pin 4
+#define next_pattern_pin 5
 
+Bounce next_pattern_pin_debouncer = Bounce();
 
 void setup() {
-  FastLED.addLeds<WS2812B, DATA_PIN01, GRB>(leds[0], NUM_LEDS);
-  FastLED.addLeds<WS2812B, DATA_PIN02, GRB>(leds[1], NUM_LEDS);
+  FastLED.addLeds<CHIPSET, DATA_PIN01, COLOR_ORDER>(leds[0], NUM_LEDS);
+  FastLED.addLeds<CHIPSET, DATA_PIN02, COLOR_ORDER>(leds[1], NUM_LEDS);
   FastLED.clear();
   FastLED.setBrightness(BRIGHTNESS_DEFAULT);
   FastLED.show();
+  randomSeed(analogRead(A1));
   random16_add_entropy(random());
+
+
+
+  pinMode(next_pattern_pin, INPUT_PULLUP);
+  pinMode(auto_toggle_pin, INPUT_PULLUP);
+
+  // After setting up the button, setup the Bounce instance :
+  next_pattern_pin_debouncer.attach(next_pattern_pin);
+  next_pattern_pin_debouncer.interval(20); // interval in ms 
 }
 
 void loop() {
   now = millis();
-  elapsed = now - pattern_start_ts;
-  //check if the pattern time has elapsed - overflow safe!
-  if (elapsed > pattern_duration) {
-    pattern_duration = 8000;//random16(4000,16000)
-    pattern_start_ts = now;
-    current_pattern_index = (current_pattern_index + 1) % NUM_PATTERNS;
-    global_random_color = get_random_color();
-  }
+  update_pattern(now);
+  update_brightness();
+
   unsigned long newFrame = now / frame_interval;
   if (newFrame != frame) {
     frame = newFrame;
     patterns[current_pattern_index]();
     FastLED.show();
   }
-
 }
 
+void update_brightness(){
+  //should return a number between 0 - 1023 on Nano
+  int brightness_reading = analogRead(brightness_pin);
+  brightness_reading = brightness_reading >> 7; // divide by 128
+  brightness_reading = brightness_reading << 5; // multiply by 32
+  FastLED.setBrightness(brightness_reading);
+}
+
+void update_pattern(unsigned long now){
+  next_pattern_pin_debouncer.update();
+  int next_pattern_pin_state = next_pattern_pin_debouncer.read();
+  int auto_toggle = digitalRead(auto_toggle_pin);
+
+  elapsed = now - pattern_start_ts;
+
+  //check if the pattern time has elapsed - overflow safe!
+  if ((auto_toggle == HIGH && elapsed > pattern_duration) || next_pattern_pin_state == LOW && last_button_state != LOW) {
+    pattern_start_ts = now;
+    pattern_duration = random16(30000,60000);
+    current_pattern_index = (current_pattern_index + 1) % NUM_PATTERNS;
+    global_random_color = get_random_color();
+  }
+  last_button_state = next_pattern_pin_state;  
+}
 
 CRGB get_random_color() {
-  CHSV hsv(random8(), 255, 255);
+
+  CHSV hsv(random(256), 255, 255);
   CRGB rgb;
   hsv2rgb_rainbow( hsv, rgb);
   return rgb;
@@ -171,7 +196,7 @@ void larson_scanner_wipe(){
 }
 
 void random_complementary(){
-  frame_interval = 120;
+  frame_interval = 100;
   complementary_color_bars(get_random_color(), 5);
 }
 
@@ -179,7 +204,7 @@ void random_complementary_bars(){
   complementary_color_bars(global_random_color, 5);
 }
 
-void complementary_color_bars(CRGB color, int length){
+void complementary_color_bars(CRGB color, unsigned int length){
   CRGB complementary_color = get_complementary_color(color);
   shift_all_leds(1);
 
